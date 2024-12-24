@@ -5,31 +5,38 @@
 #
 #
 
-import os, random, subprocess
+import os
+import random
+import subprocess
 
-def pick_random_file(directory):
+def get_audio_files_by_directory(directory):
     """
-    Pick a random file from the specified directory hierarchy.
+    Create a dictionary of audio files grouped by top-level subdirectories, excluding the top-level directory itself.
 
     Parameters:
         directory (str): The path to the directory to search for files.
 
     Returns:
-        str: The path to the randomly selected file, or None if no files are found.
+        dict: A dictionary where keys are top-level subdirectories, and values are lists of audio file paths.
     """
-    file_list = []
+    audio_files = {}
+    audio_extensions = {".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a"}
 
-    # Walk through the directory hierarchy
     for root, _, files in os.walk(directory):
-        for file in files:
-            # Append the full file path to the list
-            file_list.append(os.path.join(root, file))
+        # Get the relative top-level directory
+        relative_root = os.path.relpath(root, directory)
+        if relative_root == ".":
+            continue  # Skip the top-level directory itself
+        top_level_dir = relative_root.split(os.sep)[0]
 
-    # Return a random file if the list is not empty
-    if file_list:
-        return random.choice(file_list)
-    else:
-        return None
+        if top_level_dir not in audio_files:
+            audio_files[top_level_dir] = []
+
+        for file in files:
+            if os.path.splitext(file)[1].lower() in audio_extensions:
+                audio_files[top_level_dir].append(os.path.join(root, file))
+
+    return audio_files
 
 def play_audio_file(file_path):
     """
@@ -43,17 +50,20 @@ def play_audio_file(file_path):
     except subprocess.CalledProcessError as e:
         print(f"Error playing file: {e}")
 
-
 if __name__ == "__main__":
-    # Specify audio file location
-    directory="/audio"
+    # Specify the root directory to search
+    directory = "/audio"
 
-    #
-    # Forever loop
-    while 1:
-        # Pick a random file
-        random_file = pick_random_file(directory)
+    # Get the audio files grouped by top-level subdirectories
+    audio_files_by_directory = get_audio_files_by_directory(directory)
 
-        # If a file was picked, play it using cvlc...
-        if random_file:
+    # Continuously randomise the order of top-level directories and play a random file from each
+    while True:
+        top_level_dirs = list(audio_files_by_directory.keys())
+        random.shuffle(top_level_dirs)
+        for top_level_dir in top_level_dirs:
+            files = audio_files_by_directory[top_level_dir]
+            if files:
+                random_file = random.choice(files)
                 play_audio_file(random_file)
+
