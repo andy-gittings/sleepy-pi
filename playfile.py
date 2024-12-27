@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 #
 #
-# Play random audio files from /audio directory
+# Play random audio files from /audio directory and handle airplay interruptions
 #
 #
-
 import os
 import random
 import subprocess
+import time
 
 def get_audio_files_by_directory(directory):
     """
@@ -45,25 +45,45 @@ def play_audio_file(file_path):
     Parameters:
         file_path (str): The path to the audio file to play.
     """
+    process = None
     try:
-        subprocess.run(["cvlc", "--play-and-exit", file_path], check=True)
-    except subprocess.CalledProcessError as e:
+        process = subprocess.Popen(["cvlc", "--play-and-exit", file_path])
+        while process.poll() is None:
+            if os.path.exists(control_file):
+                process.terminate()
+                process.wait()
+                break
+            time.sleep(5)
+    except Exception as e:
         print(f"Error playing file: {e}")
+    finally:
+        if process and process.poll() is None:
+            process.terminate()
 
 if __name__ == "__main__":
     # Specify the root directory to search
     directory = "/audio"
 
+    # Path to the airplay control file
+    control_file = "/tmp/airplay-playing"
+
     # Get the audio files grouped by top-level subdirectories
     audio_files_by_directory = get_audio_files_by_directory(directory)
 
-    # Continuously randomise the order of top-level directories and play a random file from each
+    # Continuously randomize the order of top-level directories and play a random file from each
     while True:
+        if os.path.exists(control_file):
+            time.sleep(5)  # Wait and check again
+            continue
+
         top_level_dirs = list(audio_files_by_directory.keys())
         random.shuffle(top_level_dirs)
         for top_level_dir in top_level_dirs:
             files = audio_files_by_directory[top_level_dir]
             if files:
                 random_file = random.choice(files)
-                play_audio_file(random_file)
-
+                if not os.path.exists(control_file):
+                    play_audio_file(random_file)
+                else:
+                    print("Airplay control file detected. Stopping playback.")
+                    break
